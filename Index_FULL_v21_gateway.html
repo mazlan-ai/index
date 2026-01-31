@@ -1,0 +1,1880 @@
+INDEXT.HTML
+
+
+
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <base target="_top">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <title>Sistem Perekodan Kehadiran ROSES</title>
+
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <!-- html2canvas (untuk screenshot) -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+  <style>
+    :root{
+      --brand:#dc2626;        /* merah moden */
+      --brand-2:#b91c1c;      /* merah gelap */
+      --bg:#ffffff;
+      --bg-soft:#f8fafc;
+      --text:#0f172a;
+      --muted:#64748b;
+      --border:#e5e7eb;
+      --shadow:0 10px 30px rgba(2,6,23,.10);
+      --radius:16px;
+    }
+
+    body{background:var(--bg-soft); color:var(--text);}
+    .smallmuted{font-size:12px;color:var(--muted)}
+    .view{display:none}
+    .view.active{display:block}
+
+    /* Card / UI polish */
+    .card{border-radius:var(--radius)}
+    .card, .btn, .form-control, .form-select{border-radius:14px}
+    .btn-primary{background:var(--brand); border-color:var(--brand)}
+    .btn-primary:hover{background:var(--brand-2); border-color:var(--brand-2)}
+    .btn-outline-primary{border-color:var(--brand); color:var(--brand)}
+    .btn-outline-primary:hover{background:var(--brand); border-color:var(--brand); color:#fff}
+    .btn-outline-secondary{border-color:var(--border)}
+    .shadow-sm{box-shadow:0 6px 18px rgba(2,6,23,.08)!important}
+
+    /* Student status */
+    .card-student{border-radius:14px}
+    .status-hadir{border-left:6px solid #16a34a}
+    .status-lewat{border-left:6px solid #f59e0b}
+    .status-th{border-left:6px solid #b42318}
+
+    /* Loading */
+    #loading{
+      display:none; position:fixed; inset:0;
+      background:rgba(2,6,23,.35);
+      align-items:center; justify-content:center;
+      z-index:9999;
+    }
+    #loading .box{
+      background:#fff; padding:16px 18px; border-radius:18px;
+      box-shadow:var(--shadow);
+      display:flex; gap:12px; align-items:center;
+      font-weight:700;
+    }
+
+    /* TOP TABS (asal) */
+    .nav-pills .nav-link{
+      border-radius:999px;
+      border:1px solid var(--border);
+      color:var(--text);
+      background:#fff;
+    }
+    .nav-pills .nav-link.active{
+      background:var(--brand);
+      border-color:var(--brand);
+      color:#fff;
+      box-shadow:0 8px 18px rgba(220,38,38,.18);
+    }
+
+    /* === MOBILE APP MENU STYLE (tanpa ubah struktur) === */
+    @media (max-width: 768px){
+      /* bagi ruang sebab menu fixed bawah */
+      body{ padding-bottom: 86px; }
+
+      /* jadikan tab pills sebagai "bottom app bar" */
+      .nav.nav-pills{
+        position:fixed;
+        left:0; right:0; bottom:0;
+        z-index:1050;
+        padding:10px 10px calc(10px + env(safe-area-inset-bottom));
+        background:rgba(255,255,255,.92);
+        backdrop-filter: blur(10px);
+        border-top:1px solid var(--border);
+        box-shadow: 0 -10px 30px rgba(2,6,23,.10);
+        margin:0 !important;
+        justify-content:space-between;
+        gap:8px !important;
+      }
+
+      .nav.nav-pills .nav-item{ flex:1; }
+
+      /* button jadi "app tab" */
+      .nav.nav-pills .nav-link{
+        width:100%;
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+        gap:4px;
+        padding:10px 6px;
+        border-radius:16px;
+        border:1px solid var(--border);
+        font-size:12px;
+        line-height:1.1;
+      }
+
+      /* tambah “ikon” guna emoji — tak perlu library */
+      #tab-form::before{content:"📝"; font-size:16px; line-height:1;}
+      #tab-pukal::before{content:"🎯"; font-size:16px; line-height:1;}
+      #tab-dash::before{content:"📊"; font-size:16px; line-height:1;}
+      #tab-search::before{content:"🔎"; font-size:16px; line-height:1;}
+      #tab-arkib::before{content:"🗂️"; font-size:16px; line-height:1;}
+
+      /* header jadi lebih kompak */
+      .h4{font-size:18px;}
+    }
+  </style>
+</head>
+
+<body>
+  
+
+<script>
+/* ========= CONFIG =========
+   Letak Client ID Google OAuth anda di sini (Web application):
+   Contoh: 1080...apps.googleusercontent.com
+*/
+window.GOOGLE_CLIENT_ID_OAUTH = window.GOOGLE_CLIENT_ID_OAUTH || "PASTE_CLIENT_ID_HERE.apps.googleusercontent.com";
+</script>
+
+<div id="loading"><div class="box"><div class="spinner-border"></div><div>Loading...</div></div></div>
+
+  <div class="container py-3">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+      <div>
+        <div class="h4 mb-0">Sistem Perekodan Kehadiran ROSES</div>
+        <div class="smallmuted">Harian • Program Khas • Dashboard • Arkib</div>
+        <div class="smallmuted" id="guru-detected">Login dikesan: <b>-</b></div>
+        <div class="smallmuted" id="guru-login-info"></div>
+      </div>
+
+      <div class="d-flex flex-wrap gap-2 align-items-end">
+        <div style="min-width:170px">
+          <div class="smallmuted">GURU_NAMA</div>
+          <input id="guruNamaManual" class="form-control form-control-sm" placeholder="Contoh: Mazlan">
+        </div>
+        <div style="min-width:210px">
+          <div class="smallmuted">GURU_EMAIL</div>
+          <input id="guruEmailManual" class="form-control form-control-sm" placeholder="contoh@domain.com">
+        </div>
+        <button class="btn btn-outline-primary btn-sm" onclick="simpanProfilGuru()">Simpan Guru</button>
+        <button class="btn btn-outline-secondary btn-sm" onclick="resetDanIsiBaru()">Reset</button>
+      </div>
+    </div>
+
+    
+  <!-- PROFIL GURU (GOOGLE AUTH - PRO) -->
+  <div class="card shadow-sm border-0 mb-3" id="profileProCard">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div>
+          <div class="fw-semibold">Profil Guru (Google Login)</div>
+          <div class="smallmuted">Status: <span id="authStatus" class="badge bg-secondary">Semak...</span></div>
+          <div class="smallmuted mt-1" id="authUserLine">-</div>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <div id="gSignInBtn"></div>
+          <button id="btnLogout" class="btn btn-outline-danger btn-sm" onclick="logoutGuru()" style="display:none;">Logout</button>
+        </div>
+      </div>
+
+      <hr class="my-2">
+
+      <div class="row g-3 align-items-center">
+        <div class="col-md-3 text-center">
+          <img id="imgProfilGuru" src="" alt="Profil" style="width:96px;height:96px;border-radius:999px;object-fit:cover;border:1px solid #e5e7eb;background:#fff;">
+          <div class="smallmuted mt-2">Gambar profil</div>
+        </div>
+
+        <div class="col-md-9">
+          <div id="profilViewMode" style="display:none;">
+            <div>Nama: <b id="guruNamaView">-</b></div>
+            <div>Email: <b id="guruEmailView">-</b></div>
+            <div>Status Guru: <b id="guruStatusView">Aktif</b></div>
+            <div class="d-flex gap-2 mt-2">
+              <button class="btn btn-outline-primary btn-sm" onclick="toggleEditProfil(true)">Edit Profil</button>
+              <button class="btn btn-outline-danger btn-sm" onclick="padamGambarProfil()">Buang Gambar</button>
+            </div>
+          </div>
+
+          <div id="profilEditMode" style="display:none;">
+            <div class="row g-2">
+              <div class="col-md-6">
+                <label class="form-label small mb-1">Nama Penuh</label>
+                <input id="guruNamaManualPro" class="form-control form-control-sm" placeholder="Contoh: Mohd Mazlan Bin Ismail">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small mb-1">Email (ikut login)</label>
+                <input id="guruEmailManualPro" class="form-control form-control-sm" disabled>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small mb-1">Status Guru</label>
+                <input id="guruStatusManualPro" class="form-control form-control-sm" placeholder="Contoh: Aktif / Cuti / Ganti">
+              </div>
+            </div>
+
+            <label class="form-label small mt-2 mb-1">Upload gambar profil (override)</label>
+            <input id="guruPhotoFilePro" type="file" accept="image/*" class="form-control form-control-sm">
+
+            <div class="d-flex gap-2 mt-3">
+              <button class="btn btn-primary btn-sm" onclick="simpanProfilGuruPro()">Simpan</button>
+              <button class="btn btn-outline-secondary btn-sm" onclick="toggleEditProfil(false)">Batal</button>
+            </div>
+          </div>
+
+          <div id="profilNeedLogin" class="text-muted" style="display:none;">
+            Sila klik <b>Login</b> untuk aktifkan profil guru.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<!-- Tabs (STRUKTUR ASAL DIKEKALKAN) -->
+    <ul class="nav nav-pills gap-2 mb-3">
+      <li class="nav-item"><button id="tab-form"  class="nav-link active" onclick="tukarView('form')">Borang</button></li>
+      <li class="nav-item"><button id="tab-pukal" class="nav-link" onclick="tukarView('pukal')">Program Khas</button></li>
+      <li class="nav-item"><button id="tab-dash"  class="nav-link" onclick="tukarView('dash')">Dashboard</button></li>
+      <li class="nav-item"><button id="tab-search" class="nav-link" onclick="tukarView('search')">Carian</button></li>
+      <li class="nav-item"><button id="tab-arkib" class="nav-link" onclick="tukarView('arkib')">Arkib</button></li>
+    </ul>
+
+    <!-- VIEW: FORM HARIAN -->
+    <div id="view-form" class="view active">
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="row g-2">
+            <div class="col-md-3">
+              <label class="form-label">Tarikh</label>
+              <input id="tarikh" type="date" class="form-control">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Masa</label>
+              <input id="masa" type="time" class="form-control">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Subjek</label>
+              <select id="subjek" class="form-select"></select>
+              <div class="input-group mt-2">
+                <input id="subjekBaru" class="form-control form-control-sm" placeholder="Tambah subjek baru...">
+                <button class="btn btn-sm btn-outline-primary" onclick="tambahSubjekUI()">Tambah</button>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Kelas</label>
+              <select id="kelas" class="form-select" onchange="paparPelajar()"></select>
+              <datalist id="list-cadangan"></datalist>
+            </div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 mt-3">
+            <button class="btn btn-outline-success btn-sm" onclick="tandaPukal('h')">Semua Hadir</button>
+            <button class="btn btn-outline-warning btn-sm" onclick="tandaPukal('l')">Semua Lewat</button>
+            <button class="btn btn-outline-danger btn-sm" onclick="tandaPukal('t')">Semua TH</button>
+            <button class="btn btn-primary ms-auto" onclick="hantarBorang()">Hantar & Jana PDF</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-3" id="senarai-pelajar-container">
+        <div class="smallmuted">Pilih kelas untuk papar senarai pelajar.</div>
+      </div>
+    </div>
+
+    <!-- VIEW: PROGRAM KHAS -->
+    <div id="view-pukal" class="view">
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="row g-2">
+            <div class="col-md-4">
+              <label class="form-label">Nama Program</label>
+              <input id="pukal-program" class="form-control" placeholder="Contoh: Ceramah Motivasi">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Sasaran</label>
+              <select id="pukal-tingkatan" class="form-select" onchange="updateCadanganPukal()">
+                <option value="" selected disabled>Pilih sasaran...</option>
+                <option value="all">Semua Pelajar</option>
+                <option value="1">Tingkatan 1</option>
+                <option value="2">Tingkatan 2</option>
+                <option value="3">Tingkatan 3</option>
+                <option value="4">Tingkatan 4</option>
+                <option value="5">Tingkatan 5</option>
+              </select>
+              <div id="info-sasaran" class="smallmuted mt-1">Sila pilih sasaran.</div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Tarikh</label>
+              <input id="pukal-tarikh" type="date" class="form-control">
+            </div>
+          </div>
+
+          <hr class="my-3">
+
+          <div class="row g-2 align-items-end">
+            <div class="col-md-8">
+              <label class="form-label">Tambah pelajar TH (tak hadir)</label>
+              <input id="inputTHPukal" class="form-control" list="list-pukal" placeholder="Taip nama...">
+              <datalist id="list-pukal"></datalist>
+            </div>
+            <div class="col-md-4 d-grid">
+              <button id="btn-tambah-pukal" class="btn btn-outline-danger" onclick="tambahKeSenaraiTH()">Tambah TH</button>
+            </div>
+          </div>
+
+          <div class="mt-3">
+            <div class="d-flex justify-content-between align-items-center">
+              <div class="fw-semibold">Senarai TH (<span id="count-th-pukal">0</span>)</div>
+              <button class="btn btn-primary btn-sm" onclick="janaLaporanPukal()">Jana Laporan Program (PDF)</button>
+            </div>
+            <div class="table-responsive mt-2">
+              <table class="table table-sm">
+                <tbody id="table-th-pukal"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW: DASHBOARD -->
+    <div id="view-dash" class="view">
+      <div class="row g-3">
+        <div class="col-lg-4">
+          <div class="card shadow-sm border-0">
+            <div class="card-body">
+              <div class="fw-semibold mb-2">Penapis</div>
+              <label class="form-label small">Guru</label>
+              <select id="filterGuru" class="form-select form-select-sm" onchange="onGuruChange()"></select>
+
+              <label class="form-label small">Kelas</label>
+              <select id="filterKelas" class="form-select form-select-sm" onchange="applyFilter()"></select>
+
+              <label class="form-label small mt-2">Subjek</label>
+              <select id="filterSubjek" class="form-select form-select-sm" onchange="applyFilter()"></select>
+
+              <label class="form-label small mt-2">Tarikh</label>
+              <input id="filterTarikh" type="date" class="form-control form-control-sm" onchange="applyFilter()">
+
+              <label class="form-label small mt-2">Jenis</label>
+              <select id="filterJenis" class="form-select form-select-sm" onchange="applyFilter()">
+                <option value="">Semua</option>
+                <option value="harian">Harian</option>
+                <option value="program">Program</option>
+              </select>
+
+              <button class="btn btn-outline-secondary btn-sm w-100 mt-3" onclick="resetFilter()">Reset Filter</button>
+            </div>
+          </div>
+
+          <div class="card shadow-sm border-0 mt-3">
+            <div class="card-body">
+              <div class="fw-semibold mb-2">Statistik</div>
+              <div class="d-flex justify-content-between"><span>Hadir</span><b id="stat-hadir">0</b></div>
+              <div class="d-flex justify-content-between"><span>Lewat</span><b id="stat-lewat">0</b></div>
+              <div class="d-flex justify-content-between"><span>TH</span><b id="stat-th">0</b></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-8">
+          <div class="card shadow-sm border-0">
+            <div class="card-body">
+              <div class="fw-semibold mb-2">Carta Kehadiran</div>
+              <div style="height:280px">
+                <canvas id="chartPai"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div class="card shadow-sm border-0 mt-3">
+            <div class="card-body">
+              <div class="fw-semibold mb-2">Senarai Risiko (Peratus &lt; 80% bila pilih Kelas)</div>
+              <ul id="list-risiko" class="list-group"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW: CARIAN -->
+    <div id="view-search" class="view">
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="row g-2">
+            <div class="col-md-8">
+              <label class="form-label">Cari nama pelajar</label>
+              <input id="inputCarian" class="form-control" placeholder="Contoh: Ahmad" list="list-cadangan">
+            </div>
+            <div class="col-md-4 d-grid align-items-end">
+              <button class="btn btn-primary mt-4 mt-md-0" onclick="cariPelajar()">Cari</button>
+            </div>
+          </div>
+
+          <div id="hasil-carian" class="mt-3" style="display:none;">
+            <div class="h5 mb-1" id="nama-pelajar-profil"></div>
+            <div class="row g-2">
+              <div class="col-md-4"><div class="p-2 border rounded">Peratus: <b id="c-peratus">0%</b></div></div>
+              <div class="col-md-4"><div class="p-2 border rounded">Lewat: <b id="c-lewat">0</b></div></div>
+              <div class="col-md-4"><div class="p-2 border rounded">TH: <b id="c-th">0</b></div></div>
+            </div>
+            <ul class="list-group mt-2" id="list-sejarah-pelajar"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW: ARKIB -->
+    <div id="view-arkib" class="view">
+      <div class="row g-3">
+        <div class="col-lg-6">
+          <div class="card shadow-sm border-0">
+            <div class="card-body">
+              <div class="fw-semibold mb-2">Arkib Harian</div>
+              <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                  <tbody id="table-arkib"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <div class="card shadow-sm border-0">
+            <div class="card-body">
+              <div class="fw-semibold mb-2">Arkib Program</div>
+              <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                  <tbody id="table-arkib-program"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW: RESIT -->
+    <div id="view-resit" class="view">
+      <div id="resit-capture-area" class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="d-flex justify-content-between flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+              <img id="resit-avatar" src="" style="width:44px;height:44px;border-radius:999px;object-fit:cover;border:1px solid var(--border);background:#fff;" alt="avatar">
+            </div>
+            <div>
+              <div class="h5 mb-0" id="resit-tajuk-program">-</div>
+              <div class="smallmuted">Tarikh: <span id="resit-tarikh">-</span> • Masa: <span id="resit-masa">-</span></div>
+              <div class="smallmuted" id="resit-kategori">-</div>
+            </div>
+            <div class="text-end">
+              <div class="display-6 fw-bold" id="resit-peratus">0%</div>
+              <div class="smallmuted">Peratus Kehadiran</div>
+            </div>
+          </div>
+
+          <hr>
+
+          <div class="row g-2">
+            <div class="col-md-4"><div class="p-2 border rounded">Jumlah: <b id="resit-total">0</b></div></div>
+            <div class="col-md-4"><div class="p-2 border rounded text-success">Hadir: <b id="resit-hadir">0</b></div></div>
+            <div class="col-md-4"><div class="p-2 border rounded text-danger">TH: <b id="resit-th">0</b></div></div>
+          </div>
+
+          <div class="row g-3 mt-1">
+            <div class="col-md-6">
+              <div class="fw-semibold mb-1 text-danger">Senarai Tidak Hadir</div>
+              <div id="resit-list-masalah" class="border rounded p-2" style="min-height:120px"></div>
+            </div>
+            <div class="col-md-6">
+              <div class="fw-semibold mb-1 text-success">Senarai Hadir</div>
+              <div id="resit-list-hadir" class="border rounded p-2" style="min-height:120px"></div>
+            </div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 mt-3 align-items-center">
+            <div id="pdf-link-container"></div>
+            <button class="btn btn-outline-primary btn-sm ms-auto" onclick="shareScreenshot(event)">Share / Screenshot</button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="tukarView('form')">Kembali</button>
+          </div>
+
+          <div class="mt-3">
+            <iframe id="pdf-preview" style="width:100%; height:520px; border:1px solid var(--border); border-radius:12px;"></iframe>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ========= ANTI PUTIH ========= */
+window.onerror = function (msg, src, line) {
+  alert("RALAT SISTEM:\n" + msg + "\nBaris: " + line + "\n\nJika masih berlaku, beritahu mesej ini.");
+  var loading = document.getElementById("loading");
+  if (loading) loading.style.display = "none";
+  return true;
+};
+
+function el(id){ return document.getElementById(id); }
+
+
+/* ========= PROFIL GURU (MANUAL OVERRIDE) =========
+   Nota: Dalam Web App Apps Script, email/nama login kadang-kadang tidak boleh dibaca (privacy/domain).
+   Jadi kita sediakan override manual. Data ini akan disimpan dalam localStorage browser dan dihantar
+   bersama setiap rekod ke Apps Script untuk direkod sebagai GURU_EMAIL/GURU_NAMA.
+*/
+function loadProfilGuru(){
+  try{
+    var n = localStorage.getItem("roses_guru_nama") || "";
+    var e = localStorage.getItem("roses_guru_email") || "";
+    if (el("guruNamaManual")) el("guruNamaManual").value = n;
+    if (el("guruEmailManual")) el("guruEmailManual").value = e;
+  }catch(err){}
+}
+function getProfilGuru(){
+  var nama = (el("guruNamaManual")?.value || "").trim();
+  var email = (el("guruEmailManual")?.value || "").trim();
+  return { guruNama: nama, guruEmail: email };
+}
+function simpanProfilGuru(){
+  var p = getProfilGuru();
+  if (!p.guruNama) return alert("Sila isi GURU_NAMA.");
+  if (!p.guruEmail) return alert("Sila isi GURU_EMAIL.");
+  // simple validation
+  if (p.guruEmail.indexOf("@") === -1) return alert("GURU_EMAIL tidak sah.");
+  try{
+    localStorage.setItem("roses_guru_nama", p.guruNama);
+    localStorage.setItem("roses_guru_email", p.guruEmail);
+  }catch(err){}
+  alert("Profil guru disimpan pada browser ini.");
+}
+var dataGlobal = {};
+var allRecords = [];
+var myChartPai = null;
+var currentPdfUrl = "";
+
+// Program Khas
+var totalPelajarSasaran = 0;
+var listTHPukal = []; // [{nama,kelas}]
+
+
+window.onload = function(){ mulaSistem(); initGoogleAuth(); loadProfileAuth(); };
+
+function getGuruFromStorage(){
+  try{
+    return {
+      nama: (localStorage.getItem("GURU_NAMA") || "").trim(),
+      email: (localStorage.getItem("GURU_EMAIL") || "").trim()
+    };
+  }catch(e){ return {nama:"", email:""}; }
+}
+function setGuruToStorage(nama,email){
+  try{
+    localStorage.setItem("GURU_NAMA", (nama||"").trim());
+    localStorage.setItem("GURU_EMAIL", (email||"").trim());
+  }catch(e){}
+}
+function initGuruProfile(){
+  // 1) Prefill dari simpanan lokal
+  var s = getGuruFromStorage();
+  if (el("guruNamaManual") && s.nama) el("guruNamaManual").value = s.nama;
+  if (el("guruEmailManual") && s.email) el("guruEmailManual").value = s.email;
+
+  // 2) Auto-detect (best-effort) dari Apps Script
+  google.script.run
+    .withSuccessHandler(function(info){
+      var emailDetected = (info && info.email) ? String(info.email).trim() : "";
+      var nameGuess = (info && info.nameGuess) ? String(info.nameGuess).trim() : "";
+
+      // Papar status login dikesan
+      var node = el("guru-detected");
+      if (node){
+        node.innerHTML = emailDetected
+          ? ('Login dikesan: <b>' + emailDetected + '</b>')
+          : ('Login dikesan: <b>(tidak dapat dikesan)</b> — guna input manual di bawah');
+      }
+
+      // Auto-isi jika user belum isi
+      if (emailDetected && el("guruEmailManual") && !el("guruEmailManual").value.trim()){
+        el("guruEmailManual").value = emailDetected;
+      }
+      if (nameGuess && el("guruNamaManual") && !el("guruNamaManual").value.trim()){
+        el("guruNamaManual").value = nameGuess;
+      }
+
+      // Jika berjaya detect/isi, simpan ke storage supaya konsisten
+      var namaNow = el("guruNamaManual") ? el("guruNamaManual").value.trim() : "";
+      var emailNow = el("guruEmailManual") ? el("guruEmailManual").value.trim() : "";
+      if (namaNow || emailNow) setGuruToStorage(namaNow, emailNow);
+    })
+    .withFailureHandler(function(err){
+      var node = el("guru-detected");
+      if (node) node.innerHTML = 'Login dikesan: <b>(ralat)</b> — ' + (err.message || err);
+    })
+    .whoAmI();
+}
+
+function simpanProfilGuru(){
+  var nama = (el("guruNamaManual")?.value || "").trim();
+  var email = (el("guruEmailManual")?.value || "").trim();
+  if (!nama || !email) return alert("Sila isi GURU_NAMA dan GURU_EMAIL.");
+  setGuruToStorage(nama,email);
+  alert("Profil guru disimpan untuk peranti ini.");
+}
+
+
+/* ========= PDF PREVIEW ========= */
+function extractDriveFileId(url) {
+  if (!url) return "";
+  var m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (m && m[1]) return m[1];
+  m = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (m && m[1]) return m[1];
+  return "";
+}
+function setPdfPreview(url) {
+  var iframe = el("pdf-preview");
+  if (!iframe) return;
+  var id = extractDriveFileId(url);
+  iframe.src = id ? ("https://drive.google.com/file/d/" + id + "/preview") : "";
+}
+
+/* ========= INIT ========= */
+function mulaSistem(){
+  loadProfilGuru();
+  var today = new Date().toISOString().split("T")[0];
+  if (el("tarikh")) el("tarikh").value = today;
+  if (el("pukal-tarikh")) el("pukal-tarikh").value = today;
+  if (el("masa")) el("masa").value = new Date().toTimeString().substring(0,5);
+
+  // Papar identiti login (diagnostik)
+  try{
+    google.script.run.withSuccessHandler(function(x){
+      var info = "";
+      if (x && (x.effectiveUser || x.activeUser)){
+        info = "Login dikesan: " + (x.effectiveUser || x.activeUser);
+        if (x.activeUser && x.effectiveUser && x.activeUser !== x.effectiveUser){
+          info += " (active: " + x.activeUser + ")";
+        }
+      } else {
+        info = "Login dikesan: (tidak dapat dikesan) — semak setting deploy Web App.";
+      }
+      var box = document.getElementById("guru-login-info");
+      if (box) box.textContent = info;
+    }).whoAmI();
+  }catch(e){}
+
+  google.script.run
+    .withSuccessHandler(renderSubjek)
+    .withFailureHandler(function(err){ alert("Ralat subjek: " + (err.message || err)); })
+    .getSenaraiSubjek();
+
+  google.script.run
+    .withSuccessHandler(function(data){
+      dataGlobal = data || {};
+
+      var s = el("kelas");
+      if (s){
+        s.innerHTML = '<option value="" disabled selected>Pilih Kelas...</option>';
+        Object.keys(dataGlobal).forEach(k => s.innerHTML += `<option>${k}</option>`);
+      }
+
+      var fk = el("filterKelas");
+      if (fk){
+        fk.innerHTML = '<option value="">Semua</option>';
+        Object.keys(dataGlobal).forEach(k => fk.innerHTML += `<option>${k}</option>`);
+      }
+
+      sediakanCadanganCarian(dataGlobal);
+      renderTablePukal();
+      muatDataDashboard(true);
+      muatDataArkib();
+    })
+    .withFailureHandler(function(err){
+      alert("Ralat data pelajar: " + (err.message || err));
+    })
+    .dapatkanDataPelajar();
+}
+
+function showLoading(on){
+  var l = el("loading");
+  if (!l) return;
+  l.style.display = on ? "flex" : "none";
+}
+
+/* ========= UI NAV ========= */
+function tukarView(v){
+  ["form","pukal","dash","search","arkib","resit"].forEach(id=>{
+    var node = el("view-"+id);
+    if (node) node.classList.remove("active");
+  });
+  var node = el("view-"+v);
+  if (node) node.classList.add("active");
+
+  ["tab-form","tab-pukal","tab-dash","tab-search","tab-arkib"].forEach(id=>{
+    var b = el(id);
+    if (b) b.classList.remove("active");
+  });
+  if (v !== "resit"){
+    var tab = el("tab-"+v);
+    if (tab) tab.classList.add("active");
+  }
+
+  if (v === "dash" || v === "search") muatDataDashboard(true);
+  if (v === "arkib") muatDataArkib();
+}
+
+/* ========= SUBJEK ========= */
+function renderSubjek(list){
+  var sel = el("subjek");
+  if (!sel) return;
+  sel.innerHTML = "";
+  (list || []).forEach(s=> sel.innerHTML += `<option value="${s}">${s}</option>`);
+}
+function tambahSubjekUI(){
+  var x = (el("subjekBaru")?.value || "").trim();
+  if (!x) return alert("Sila isi subjek baru.");
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function(list){
+      showLoading(false);
+      if (el("subjekBaru")) el("subjekBaru").value = "";
+      renderSubjek(list);
+      alert("Subjek berjaya ditambah.");
+    })
+    .withFailureHandler(function(err){
+      showLoading(false);
+      alert(err.message || err);
+    })
+    .tambahSubjekBaru(x);
+}
+
+/* ========= CADANGAN CARIAN ========= */
+function sediakanCadanganCarian(data){
+  var datalist = el("list-cadangan");
+  if (!datalist) return;
+  datalist.innerHTML = "";
+  Object.keys(data || {}).forEach(k=>{
+    (data[k]||[]).forEach(n=>{
+      var opt = document.createElement("option");
+      opt.value = n;
+      opt.label = "Kelas: " + k;
+      datalist.appendChild(opt);
+    });
+  });
+}
+
+/* ========= HARIAN ========= */
+function paparPelajar(){
+  var k = el("kelas")?.value;
+  var c = el("senarai-pelajar-container");
+  if (!c) return;
+
+  c.innerHTML = "";
+  if (!k || !dataGlobal[k]) {
+    c.innerHTML = "<div class='smallmuted'>Sila pilih kelas.</div>";
+    return;
+  }
+
+  dataGlobal[k].forEach((n,i)=>{
+    c.innerHTML += `
+      <div class="card card-student p-2 shadow-sm mb-2" id="c${i}">
+        <div class="fw-bold">${n}</div>
+        <div class="btn-group w-100 mt-1">
+          <input type="radio" class="btn-check" name="rad${i}" id="h${i}" onclick="st(${i},'h')" checked>
+          <label class="btn btn-outline-success btn-sm" for="h${i}">Hadir</label>
+
+          <input type="radio" class="btn-check" name="rad${i}" id="l${i}" onclick="st(${i},'l')">
+          <label class="btn btn-outline-warning btn-sm" for="l${i}">Lewat</label>
+
+          <input type="radio" class="btn-check" name="rad${i}" id="t${i}" onclick="st(${i},'t')">
+          <label class="btn btn-outline-danger btn-sm" for="t${i}">TH</label>
+        </div>
+        <input type="text" id="al${i}" class="form-control mt-2 form-control-sm" placeholder="Catatan..." style="display:none">
+      </div>
+    `;
+    st(i,"h");
+  });
+}
+
+function st(i,s){
+  var card = el("c"+i);
+  if (!card) return;
+  card.className = "card card-student p-2 shadow-sm mb-2 " + (s==="h"?"status-hadir":(s==="l"?"status-lewat":"status-th"));
+
+  var input = el("al"+i);
+  if (!input) return;
+  if (s==="l" || s==="t"){
+    input.style.display="block";
+    input.placeholder = (s==="l") ? "Sebab Lewat..." : "Sebab Tidak Hadir...";
+  } else {
+    input.style.display="none";
+    input.value="";
+  }
+}
+
+function tandaPukal(type){
+  var k = el("kelas")?.value;
+  if (!k || !dataGlobal[k]) return;
+
+  var alasanPukal = "";
+  if (type==="l"){
+    alasanPukal = prompt("Masukkan alasan untuk SEMUA pelajar yang LEWAT:");
+    if (alasanPukal === null) return;
+  } else if (type==="t"){
+    alasanPukal = prompt("Masukkan alasan untuk SEMUA pelajar yang TIDAK HADIR:");
+    if (alasanPukal === null) return;
+  }
+
+  dataGlobal[k].forEach((_,i)=>{
+    if (el(type+i)) el(type+i).click();
+    if ((type==="l" || type==="t") && alasanPukal && el("al"+i)) el("al"+i).value = alasanPukal;
+  });
+}
+
+
+function getGuruPayload_(){
+  var nama = (el("guruNamaManual")?.value || "").trim();
+  var email = (el("guruEmailManual")?.value || "").trim();
+  if (!nama || !email){
+    // fallback dari storage
+    var s = getGuruFromStorage();
+    nama = nama || s.nama;
+    email = email || s.email;
+  }
+  return { guruNama: nama, guruEmail: email };
+}
+
+function hantarBorang(){
+  var k = el("kelas")?.value;
+  if (!k) return alert("Sila pilih kelas dahulu!");
+  if (!dataGlobal[k]) return alert("Data kelas tidak wujud.");
+
+  showLoading(true);
+
+  var list = [];
+  dataGlobal[k].forEach((n,i)=>{
+    var status="Hadir", alasan="";
+    var inputVal = el("al"+i)?.value || "";
+
+    if (el("l"+i)?.checked){ status="Lewat"; alasan = inputVal || "Tiada alasan"; }
+    else if (el("t"+i)?.checked){ status="Tidak Hadir"; alasan = inputVal || "Tiada alasan"; }
+
+    list.push({nama:n, status:status, alasan:alasan});
+  });
+
+  var guruP = getProfilGuru();
+
+  var data = {
+    guruNama: guruP.guruNama,
+    guruEmail: guruP.guruEmail,
+    tarikh: el("tarikh")?.value || "",
+    masa: el("masa")?.value || "",
+    subjek: el("subjek")?.value || "",
+    kelas: k,
+    pelajar: list
+  };
+
+  google.script.run
+    .withSuccessHandler(function(pdfUrl){
+      currentPdfUrl = pdfUrl;
+      janaResitHarian(data);
+      muatDataDashboard(true);
+      muatDataArkib();
+      showLoading(false);
+    })
+    .withFailureHandler(function(err){
+      showLoading(false);
+      alert(err.message || err);
+    })
+    .simpanKehadiran(data);
+}
+
+function renderSenaraiHadirBox(arr, limit){
+  limit = limit || 40;
+  if (!arr || !arr.length) return "<div class='text-muted'>TIADA</div>";
+  return arr.slice(0,limit).map(n=>`<div class="border-bottom py-1 small">${n}</div>`).join("");
+}
+
+function janaResitHarian(d){
+  el("resit-tajuk-program").innerText = (d.subjek && d.subjek.toUpperCase().startsWith("PROGRAM:")) ? d.subjek : ("HARIAN: " + d.subjek);
+  el("resit-tarikh").innerText = d.tarikh;
+  el("resit-masa").innerText = d.masa;
+  el("resit-kategori").innerText = d.kelas + " (" + d.subjek + ")";
+
+  var total=d.pelajar.length, h=0,l=0,th=0;
+  var listTH="", listHadirArr=[];
+
+  d.pelajar.forEach(p=>{
+    if (p.status==="Hadir"){ h++; listHadirArr.push(p.nama); }
+    else if (p.status==="Lewat"){ l++; listHadirArr.push(p.nama+" (Lewat)"); }
+    else { th++; listTH += `<div class="d-flex justify-content-between border-bottom py-1 small"><span>${p.nama}</span><span class="badge bg-danger">${p.status} (${p.alasan})</span></div>`; }
+  });
+
+  el("resit-list-masalah").innerHTML = listTH || "<div class='text-success text-center fw-bold mt-2'>TIADA. SEMUA HADIR! 🎉</div>";
+  el("resit-peratus").innerText = total ? (((h+l)/total)*100).toFixed(0)+"%" : "0%";
+  el("resit-total").innerText = total;
+  el("resit-hadir").innerText = (h+l);
+  el("resit-th").innerText = th;
+
+  el("resit-list-hadir").innerHTML = renderSenaraiHadirBox(listHadirArr);
+
+  el("pdf-link-container").innerHTML = currentPdfUrl ? `<a href="${currentPdfUrl}" target="_blank" class="btn btn-sm btn-link">📄 Buka fail PDF</a>` : "";
+  setPdfPreview(currentPdfUrl);
+
+  tukarView("resit");
+}
+
+/* ========= PROGRAM KHAS ========= */
+function updateCadanganPukal(){
+  var tingkatan = el("pukal-tingkatan")?.value || "";
+  var datalist = el("list-pukal");
+  var info = el("info-sasaran");
+  if (!datalist) return;
+
+  datalist.innerHTML = "";
+  totalPelajarSasaran = 0;
+
+  Object.keys(dataGlobal||{}).forEach(kelas=>{
+    var ok = (tingkatan==="all") ? true : String(kelas).trim().startsWith(tingkatan);
+    if (ok){
+      totalPelajarSasaran += (dataGlobal[kelas]||[]).length;
+      (dataGlobal[kelas]||[]).forEach(n=>{
+        var opt=document.createElement("option");
+        opt.value=n; opt.label=kelas;
+        datalist.appendChild(opt);
+      });
+    }
+  });
+
+  if (info){
+    info.innerHTML = `Sasaran: <strong>${tingkatan==="all"?"Semua Pelajar":"Tingkatan "+tingkatan}</strong> | Jumlah Murid: <strong>${totalPelajarSasaran}</strong>`;
+  }
+}
+
+function tambahKeSenaraiTH(){
+  var nama = (el("inputTHPukal")?.value || "").trim();
+  if (!nama) return alert("Sila masukkan nama pelajar.");
+
+  var kelasJumpa="";
+  Object.keys(dataGlobal||{}).forEach(k=>{
+    if ((dataGlobal[k]||[]).includes(nama)) kelasJumpa=k;
+  });
+  if (!kelasJumpa){
+    if (!confirm("Nama tidak jumpa tepat dalam data. Teruskan tambah?")) return;
+    kelasJumpa="Lain-lain";
+  }
+
+  if (listTHPukal.find(p=>p.nama===nama)) return alert("Nama ini sudah ada.");
+
+  listTHPukal.push({nama:nama, kelas:kelasJumpa});
+  if (el("inputTHPukal")) el("inputTHPukal").value="";
+  renderTablePukal();
+}
+
+function renderTablePukal(){
+  var tbody = el("table-th-pukal");
+  var count = el("count-th-pukal");
+  if (!tbody) return;
+
+  tbody.innerHTML="";
+  if (!listTHPukal.length){
+    tbody.innerHTML = `<tr><td class="text-center text-muted small p-3">Belum ada nama dimasukkan.</td></tr>`;
+  } else {
+    listTHPukal.forEach((p,idx)=>{
+      tbody.innerHTML += `
+        <tr>
+          <td class="align-middle">
+            <span class="fw-bold">${p.nama}</span><br>
+            <small class="text-muted">${p.kelas}</small>
+          </td>
+          <td class="text-end align-middle">
+            <button class="btn btn-sm btn-outline-danger" onclick="hapusTHPukal(${idx})">X</button>
+          </td>
+        </tr>`;
+    });
+  }
+  if (count) count.innerText = listTHPukal.length;
+}
+
+function hapusTHPukal(idx){
+  listTHPukal.splice(idx,1);
+  renderTablePukal();
+}
+
+function janaLaporanPukal(){
+  var namaProgram = (el("pukal-program")?.value || "").trim();
+  var tingkatan = el("pukal-tingkatan")?.value || "";
+  var tarikh = el("pukal-tarikh")?.value || "";
+
+  if (!namaProgram || !tingkatan) return alert("Sila isi Nama Program dan Pilih Sasaran.");
+  if (!totalPelajarSasaran) return alert("Tiada data pelajar dalam sasaran ini.");
+
+  showLoading(true);
+
+  var jumlahTH = listTHPukal.length;
+  var jumlahHadir = totalPelajarSasaran - jumlahTH;
+  var peratus = (jumlahHadir/totalPelajarSasaran)*100;
+
+  var guruP = getProfilGuru();
+
+  var dataLaporan = {
+    guruNama: guruP.guruNama,
+    guruEmail: guruP.guruEmail,
+    program: namaProgram,
+    tarikh: tarikh,
+    masa: new Date().toLocaleTimeString(),
+    kategori: (tingkatan==="all") ? "SEMUA PELAJAR" : "TINGKATAN " + tingkatan,
+    total: totalPelajarSasaran,
+    hadir: jumlahHadir,
+    th: jumlahTH,
+    peratus: peratus.toFixed(1) + "%",
+    tingkatan: tingkatan,
+    th_list: listTHPukal
+  };
+
+  google.script.run
+    .withSuccessHandler(function(pdfUrl){
+      currentPdfUrl = pdfUrl;
+
+      el("resit-tajuk-program").innerText = "PROGRAM: " + dataLaporan.program;
+      el("resit-tarikh").innerText = dataLaporan.tarikh;
+      el("resit-masa").innerText = dataLaporan.masa;
+      el("resit-kategori").innerText = dataLaporan.kategori;
+      el("resit-total").innerText = dataLaporan.total;
+      el("resit-hadir").innerText = dataLaporan.hadir;
+      el("resit-th").innerText = dataLaporan.th;
+      el("resit-peratus").innerText = dataLaporan.peratus;
+
+      var htmlTH = "";
+      listTHPukal.forEach(p=>{
+        htmlTH += `<div class="d-flex justify-content-between border-bottom py-1"><span>${p.nama}</span><span class="badge bg-secondary">${p.kelas}</span></div>`;
+      });
+      el("resit-list-masalah").innerHTML = htmlTH || "<div class='text-center text-success py-2'>TIADA (Semua Hadir)</div>";
+
+      var thSet = {};
+      listTHPukal.forEach(x=> thSet[(x.nama||"").trim()] = true);
+      var listHadirArr = [];
+      Object.keys(dataGlobal||{}).forEach(kelas=>{
+        var ok = (tingkatan==="all") ? true : String(kelas).trim().startsWith(tingkatan);
+        if (ok){
+          (dataGlobal[kelas]||[]).forEach(n=>{
+            if (!thSet[(n||"").trim()]) listHadirArr.push(n+" ("+kelas+")");
+          });
+        }
+      });
+      el("resit-list-hadir").innerHTML = renderSenaraiHadirBox(listHadirArr,45);
+
+      el("pdf-link-container").innerHTML = `<a href="${currentPdfUrl}" target="_blank" class="btn btn-sm btn-link">📄 Buka fail PDF</a>`;
+      setPdfPreview(currentPdfUrl);
+
+      showLoading(false);
+      muatDataArkib();
+      muatDataDashboard(true);
+      tukarView("resit");
+    })
+    .withFailureHandler(function(err){
+      showLoading(false);
+      alert(err.message || err);
+    })
+    .simpanLaporanPukal(dataLaporan);
+}
+
+/* ========= ARKIB ========= */
+function muatDataArkib(){
+  if (el("table-arkib")) el("table-arkib").innerHTML = `<tr><td class="text-center p-3">Loading...</td></tr>`;
+  if (el("table-arkib-program")) el("table-arkib-program").innerHTML = `<tr><td class="text-center p-3">Loading...</td></tr>`;
+  google.script.run.withSuccessHandler(renderDuaArkib).dapatkanSemuaArkib();
+}
+
+function renderDuaArkib(data){
+  var htmlH="";
+  if (!data?.harian?.length) htmlH = `<tr><td class="text-center text-muted p-3">Tiada rekod harian.</td></tr>`;
+  else data.harian.forEach(row=>{
+    htmlH += `<tr>
+      <td>${row.tarikh}<br><small class="text-muted">${row.masa||""}</small></td>
+      <td><b>${row.kelas}</b><br><small>${row.subjek||""}</small></td>
+      <td class="text-end"><a href="${row.linkPdf}" target="_blank" class="btn btn-sm btn-outline-primary">PDF</a></td>
+      <td class="text-end"><button class="btn btn-sm btn-danger" onclick="padamArkib('harian',${row.rowIndex},this)">🗑️</button></td>
+    </tr>`;
+  });
+  if (el("table-arkib")) el("table-arkib").innerHTML = htmlH;
+
+  var htmlP="";
+  if (!data?.program?.length) htmlP = `<tr><td class="text-center text-muted p-3">Tiada rekod program.</td></tr>`;
+  else data.program.forEach(row=>{
+    htmlP += `<tr>
+      <td>${row.tarikh}<br><small class="text-muted">${row.masa||""}</small></td>
+      <td><b>${row.program}</b><br><small>${row.sasaran}</small></td>
+      <td class="text-end"><a href="${row.linkPdf}" target="_blank" class="btn btn-sm btn-outline-dark">PDF</a></td>
+      <td class="text-end"><button class="btn btn-sm btn-danger" onclick="padamArkib('program',${row.rowIndex},this)">🗑️</button></td>
+    </tr>`;
+  });
+  if (el("table-arkib-program")) el("table-arkib-program").innerHTML = htmlP;
+}
+
+function padamArkib(jenis,rowIndex,btn){
+  if (!confirm("Padam rekod ini kekal?")) return;
+  btn.innerText="⏳";
+  google.script.run.withSuccessHandler(muatDataArkib).padamRekodArkib(jenis==="program"?"program":"harian", rowIndex);
+}
+
+/* ========= DASHBOARD ========= */
+function muatDataDashboard(silent){
+  if (!silent) showLoading(true);
+  google.script.run.withSuccessHandler(function(data){
+    allRecords = data || [];
+    populateFilterGuru();
+    populateFilterSubjek();
+    applyFilter();
+    if (!silent) showLoading(false);
+  }).dapatkanRekodKehadiran();
+}
+
+
+function populateFilterGuru(){
+  var fg = el("filterGuru");
+  if (!fg) return;
+
+  var current = fg.value || "";
+  var set = {};
+  allRecords.forEach(r=>{
+    var key = (r.guruEmail||"").trim();
+    var label = (r.guruNama||r.guruEmail||"").trim();
+    if (key) set[key]=label;
+  });
+
+  var keys = Object.keys(set).sort((a,b)=> (set[a]||a).localeCompare(set[b]||b));
+  fg.innerHTML = '<option value="">Semua</option>' + keys.map(k=>`<option value="${k}">${set[k]}</option>`).join("");
+  if (current && set[current]) fg.value=current;
+}
+
+function onGuruChange(){
+  // bila guru berubah, update list subjek ikut guru (dan kelas jika dipilih)
+  populateFilterSubjek();
+  applyFilter();
+}
+
+function populateFilterSubjek(){
+  var fs = el("filterSubjek");
+  if (!fs) return;
+
+  var fg = el("filterGuru")?.value || "";
+  var fk = el("filterKelas")?.value || "";
+
+  var current = fs.value || "";
+  var set = {};
+  allRecords.forEach(r=>{
+    if (fg && r.guruEmail !== fg) return;
+    if (fk && r.kelas !== fk) return;
+    var s = (r.subjek||"").trim();
+    if (s) set[s]=true;
+  });
+
+  var list = Object.keys(set).sort();
+  fs.innerHTML = '<option value="">Semua</option>' + list.map(s=>`<option value="${s}">${s}</option>`).join("");
+  if (current && set[current]) fs.value=current;
+}
+
+function applyFilter(){
+  if (!el("stat-hadir")) return;
+
+  var fg = el("filterGuru")?.value || "";
+  var fk = el("filterKelas")?.value || "";
+  var fs = el("filterSubjek")?.value || "";
+  var ft = el("filterTarikh")?.value || "";
+  var fj = el("filterJenis")?.value || "";
+
+  var filtered = allRecords.filter(r=>{
+    var isProgram = (r.subjek||"").toUpperCase().startsWith("PROGRAM:");
+    var okJenis = (!fj) || (fj==="program" && isProgram) || (fj==="harian" && !isProgram);
+    return okJenis &&
+      (!fg || r.guruEmail===fg) &&
+      (!fk || r.kelas===fk) &&
+      (!fs || r.subjek===fs) &&
+      (!ft || r.tarikhISO===ft);
+  });
+
+  var h=0,l=0,t=0;
+  filtered.forEach(r=>{ if(r.status==="Hadir") h++; else if(r.status==="Lewat") l++; else t++; });
+
+  el("stat-hadir").innerText=h;
+  el("stat-lewat").innerText=l;
+  el("stat-th").innerText=t;
+
+  var canvas = el("chartPai");
+  if (canvas){
+    var ctx = canvas.getContext("2d");
+    if (myChartPai) myChartPai.destroy();
+    myChartPai = new Chart(ctx,{
+      type:"doughnut",
+      data:{ labels:["Hadir","Lewat","TH"], datasets:[{ data:[h,l,t] }] },
+      options:{ maintainAspectRatio:false, plugins:{ legend:{ position:"bottom" } } }
+    });
+  }
+
+  var elList = el("list-risiko");
+  if (!elList) return;
+
+  if (fk){
+    var stats = {};
+    var classRecords = allRecords.filter(r=>r.kelas===fk);
+    classRecords.forEach(r=>{
+      if(!stats[r.nama]) stats[r.nama]={total:0, hadir:0};
+      stats[r.nama].total++;
+      if (r.status==="Hadir" || r.status==="Lewat") stats[r.nama].hadir++;
+    });
+
+    var html="";
+    Object.keys(stats).forEach(n=>{
+      var p=stats[n];
+      var per=(p.hadir/p.total)*100;
+      if (per<80) html += `<li class="list-group-item d-flex justify-content-between align-items-center">${n}<span class="badge bg-danger">${per.toFixed(0)}%</span></li>`;
+    });
+    elList.innerHTML = html || `<li class="list-group-item text-success text-center">Tiada pelajar berisiko.</li>`;
+  } else {
+    elList.innerHTML = `<li class="list-group-item text-muted text-center">Pilih 'Kelas' untuk lihat analisis risiko.</li>`;
+  }
+}
+
+function resetFilter(){
+  if (el("filterGuru")) el("filterGuru").value="";
+  if (el("filterKelas")) el("filterKelas").value="";
+  if (el("filterSubjek")) el("filterSubjek").value="";
+  if (el("filterTarikh")) el("filterTarikh").value="";
+  if (el("filterJenis")) el("filterJenis").value="";
+  populateFilterSubjek();
+  applyFilter();
+}
+
+/* ========= CARIAN ========= */
+function cariPelajar(){
+  var nama = (el("inputCarian")?.value || "").trim().toLowerCase();
+  if (!nama) return alert("Sila masukkan nama.");
+
+  if (el("hasil-carian")) el("hasil-carian").style.display="none";
+
+  var history = allRecords.filter(r=>(r.nama||"").toLowerCase().includes(nama));
+  if (!history.length) return alert("Tiada rekod dijumpai.");
+
+  if (el("hasil-carian")) el("hasil-carian").style.display="block";
+  el("nama-pelajar-profil").innerText = history[0].nama;
+
+  var h=0,l=0,t=0,total=history.length;
+  var listHtml="";
+  history.forEach(r=>{
+    if(r.status==="Hadir") h++; else if(r.status==="Lewat") l++; else t++;
+    var color = r.status==="Hadir"?"success":(r.status==="Lewat"?"warning":"danger");
+    listHtml += `<li class="list-group-item d-flex justify-content-between">
+      <div><b>${r.tarikhDisplay}</b> <span class="badge bg-secondary">${r.subjek}</span></div>
+      <span class="text-${color} fw-bold">${r.status}</span>
+    </li>`;
+  });
+
+  el("c-peratus").innerText = (((h+l)/total)*100).toFixed(0)+"%";
+  el("c-lewat").innerText = l;
+  el("c-th").innerText = t;
+  el("list-sejarah-pelajar").innerHTML = listHtml;
+}
+
+/* ========= UTIL ========= */
+function resetDanIsiBaru(){
+  if (el("kelas")) el("kelas").value="";
+  if (el("senarai-pelajar-container")) el("senarai-pelajar-container").innerHTML = "<div class='smallmuted'>Pilih kelas untuk papar senarai pelajar.</div>";
+
+  if (el("pukal-program")) el("pukal-program").value="";
+  listTHPukal = [];
+  totalPelajarSasaran = 0;
+  renderTablePukal();
+  if (el("pukal-tingkatan")) el("pukal-tingkatan").value="";
+  if (el("info-sasaran")) el("info-sasaran").innerHTML = "Sila pilih sasaran.";
+
+  google.script.run.withSuccessHandler(renderSubjek).getSenaraiSubjek();
+
+  if (el("pdf-preview")) el("pdf-preview").src="";
+  if (el("pdf-link-container")) el("pdf-link-container").innerHTML="";
+
+  tukarView("form");
+}
+
+function shareScreenshot(ev){
+  var element = el("resit-capture-area");
+  var btn = ev.target;
+  var original = btn.innerHTML;
+
+  var tarikh = el("resit-tarikh").innerText;
+  var tajuk = el("resit-tajuk-program").innerText;
+  var peratus = el("resit-peratus").innerText;
+
+  var caption = `Sistem Perekodan Kehadiran ROSES\n${tajuk}\nTarikh: ${tarikh}\nKehadiran: ${peratus}\nPDF: ${currentPdfUrl || "-"}`;
+
+  btn.innerHTML = "⏳ Menjana...";
+  btn.disabled = true;
+
+  html2canvas(element,{scale:2,useCORS:true}).then(canvas=>{
+    canvas.toBlob(function(blob){
+      var file = new File([blob], "Laporan_Kehadiran.png", {type:"image/png"});
+      if (navigator.canShare && navigator.canShare({files:[file]})){
+        navigator.share({files:[file], title:"ROSES", text:caption})
+          .finally(()=>{ btn.innerHTML=original; btn.disabled=false; });
+      } else {
+        var a = document.createElement("a");
+        a.download = "Laporan.png";
+        a.href = canvas.toDataURL();
+        a.click();
+        navigator.clipboard.writeText(caption);
+        alert("Gambar dimuat turun. Info disalin.");
+        btn.innerHTML=original; btn.disabled=false;
+      }
+    });
+  });
+}
+
+
+/* ========= PROFIL GURU (SIMPLE PRO MODE) ========= */
+function loadProfilGuruPro(){
+  google.script.run
+    .withSuccessHandler(function(p){
+      // p: {nama,email,photoFileId,photoUrl}
+      if (p && (p.nama || p.email)){
+        // set view
+        if (el("guruNamaView")) el("guruNamaView").innerText = p.nama || "-";
+        if (el("guruEmailView")) el("guruEmailView").innerText = p.email || "-";
+        if (el("guruNamaManual")) el("guruNamaManual").value = p.nama || "";
+        if (el("guruEmailManual")) el("guruEmailManual").value = p.email || "";
+        if (el("imgProfilGuru")) el("imgProfilGuru").src = p.photoUrl || "";
+        // default to view mode
+        toggleEditProfil(false);
+      } else {
+        // tiada profil, buka edit mode
+        toggleEditProfil(true);
+      }
+    })
+    .withFailureHandler(function(err){
+      console.log(err);
+    })
+    .getGuruProfilUI();
+}
+
+function toggleEditProfil(on){
+  var v = el("profilViewMode");
+  var e = el("profilEditMode");
+  if (!v || !e) return;
+  v.style.display = on ? "none" : "block";
+  e.style.display = on ? "block" : "none";
+}
+
+function simpanProfilGuruPro(){
+  var nama = (el("guruNamaManual")?.value || "").trim();
+  var email = (el("guruEmailManual")?.value || "").trim();
+  if (!nama || !email) return alert("Sila isi GURU_NAMA dan GURU_EMAIL.");
+
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function(p){
+      // Upload photo if selected
+      var f = el("guruPhotoFile")?.files?.[0];
+      if (f){
+        readFileAsBase64(f).then(function(b64){
+          google.script.run
+            .withSuccessHandler(function(resp){
+              showLoading(false);
+              loadProfilGuruPro();
+              alert("Profil & gambar berjaya disimpan.");
+            })
+            .withFailureHandler(function(err){
+              showLoading(false);
+              alert(err.message || err);
+            })
+            .uploadGuruProfilePhoto(b64, f.type, f.name);
+        });
+      } else {
+        showLoading(false);
+        loadProfilGuruPro();
+        alert("Profil berjaya disimpan.");
+      }
+    })
+    .withFailureHandler(function(err){
+      showLoading(false);
+      alert(err.message || err);
+    })
+    .simpanGuruProfil({nama:nama, email:email});
+}
+
+function padamGambarProfil(){
+  if (!confirm("Buang gambar profil?")) return;
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function(){
+      showLoading(false);
+      if (el("imgProfilGuru")) el("imgProfilGuru").src = "";
+      loadProfilGuruPro();
+    })
+    .withFailureHandler(function(err){
+      showLoading(false);
+      alert(err.message || err);
+    })
+    .removeGuruProfilePhoto();
+}
+
+function readFileAsBase64(file){
+  return new Promise(function(resolve,reject){
+    var reader = new FileReader();
+    reader.onload = function(){
+      // result = data:mime;base64,XXXX
+      var res = String(reader.result || "");
+      var idx = res.indexOf("base64,");
+      if (idx>=0) resolve(res.slice(idx+7));
+      else reject("Gagal baca base64");
+    };
+    reader.onerror = function(){ reject("Gagal baca fail"); };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Override helper: guna profil server sebagai sumber utama untuk payload
+function getGuruPayload_(){
+  var nama = (el("guruNamaView")?.innerText || "").trim();
+  var email = (el("guruEmailView")?.innerText || "").trim();
+  // fallback ke input edit jika view kosong
+  if (!nama) nama = (el("guruNamaManual")?.value || "").trim();
+  if (!email) email = (el("guruEmailManual")?.value || "").trim();
+  return { guruNama: nama, guruEmail: email };
+}
+
+
+
+
+/* ========= TOKEN HANDOFF (LOGIN GATEWAY) =========
+   Jika login dibuat di halaman lain (Gateway), token akan dihantar ke webapp melalui URL hash:
+   .../exec#id_token=XXXX
+*/
+function acceptTokenFromHash(){
+  try{
+    if (!location.hash) return;
+    var h = location.hash.replace(/^#/, "");
+    var m = h.match(/(?:^|&)id_token=([^&]+)/) || h.match(/(?:^|&)token=([^&]+)/);
+    if (!m) return;
+    var idToken = decodeURIComponent(m[1] || "");
+    if (!idToken) return;
+    history.replaceState(null, document.title, location.pathname + location.search);
+    showLoading(true);
+    google.script.run
+      .withSuccessHandler(function(p){
+        showLoading(false);
+        if (typeof updateProfileUI === "function") updateProfileUI(p, true);
+        alert("Login berjaya (Gateway).");
+      })
+      .withFailureHandler(function(err){
+        showLoading(false);
+        alert(err.message || err);
+      })
+      .saveProfileFromIdToken(idToken);
+  }catch(e){}
+}
+
+/* ========= GOOGLE AUTH (GIS) ========= */
+// 1) Isi CLIENT ID sama seperti di Code.gs
+window.GOOGLE_CLIENT_ID_OAUTH = window.GOOGLE_CLIENT_ID_OAUTH || ""; // set in config section
+
+function initGoogleAuth(){
+  try{
+    google.accounts.id.initialize({
+      client_id: window.window.GOOGLE_CLIENT_ID_OAUTH,
+      callback: onGoogleCredential,
+      auto_select: false,
+      cancel_on_tap_outside: true
+    });
+    // Render button
+    var btnDiv = document.getElementById("gSignInBtn");
+    if (btnDiv){
+      btnDiv.innerHTML = "";
+      google.accounts.id.renderButton(btnDiv, { theme: "outline", size: "large", text: "signin_with" });
+    }
+  }catch(e){
+    console.log(e);
+  }
+}
+
+function onGoogleCredential(resp){
+  var idToken = resp && resp.credential;
+  if (!idToken) return alert("Login gagal: token kosong.");
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function(p){
+      showLoading(false);
+      updateProfileUI(p, true);
+      alert("Login berjaya.");
+    })
+    .withFailureHandler(function(err){
+      showLoading(false);
+      alert(err.message || err);
+    })
+    .saveProfileFromIdToken(idToken);
+}
+
+function logoutGuru(){
+  // "logout" untuk sistem: buang profil server-side + disable auto select
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function(){
+      showLoading(false);
+      try{ google.accounts.id.disableAutoSelect(); }catch(e){}
+      updateProfileUI(null, false);
+      alert("Anda telah logout dari sistem ROSES.");
+    })
+    .withFailureHandler(function(err){
+      showLoading(false);
+      alert(err.message || err);
+    })
+    .clearMyProfile();
+}
+
+function loadProfileAuth(){
+  google.script.run
+    .withSuccessHandler(function(p){
+      updateProfileUI(p, !!p);
+    })
+    .withFailureHandler(function(err){
+      console.log(err);
+      updateProfileUI(null, false);
+    })
+    .getMyProfileUI();
+}
+
+function updateProfileUI(p, loggedIn){
+  var status = document.getElementById("authStatus");
+  var line = document.getElementById("authUserLine");
+  var btnLogout = document.getElementById("btnLogout");
+  var view = document.getElementById("profilViewMode");
+  var edit = document.getElementById("profilEditMode");
+  var need = document.getElementById("profilNeedLogin");
+
+  if (!p || !p.email){
+    if (status) { status.className="badge bg-danger"; status.innerText="LOGOUT"; }
+    if (line) line.innerHTML = "Tiada sesi login aktif.";
+    if (btnLogout) btnLogout.style.display="none";
+    if (view) view.style.display="none";
+    if (edit) edit.style.display="none";
+    if (need) need.style.display="block";
+    if (document.getElementById("imgProfilGuru")) document.getElementById("imgProfilGuru").src="";
+    if (document.getElementById("resit-avatar")) document.getElementById("resit-avatar").src="";
+    return;
+  }
+
+  if (status) { status.className="badge bg-success"; status.innerText="LOGGED IN"; }
+  if (line) line.innerHTML = "Log masuk sebagai: <b>" + (p.email||"-") + "</b>";
+  if (btnLogout) btnLogout.style.display="inline-block";
+  if (need) need.style.display="none";
+  if (view) view.style.display="block";
+  if (edit) edit.style.display="none";
+
+  // set fields
+  if (document.getElementById("guruNamaView")) document.getElementById("guruNamaView").innerText = p.name || "-";
+  if (document.getElementById("guruEmailView")) document.getElementById("guruEmailView").innerText = p.email || "-";
+  if (document.getElementById("guruStatusView")) document.getElementById("guruStatusView").innerText = p.status || "Aktif";
+  if (document.getElementById("guruNamaManual")) document.getElementById("guruNamaManual").value = p.name || "";
+  if (document.getElementById("guruEmailManual")) document.getElementById("guruEmailManual").value = p.email || "";
+  if (document.getElementById("guruStatusManual")) document.getElementById("guruStatusManual").value = p.status || "Aktif";
+
+  var img = p.photoUrl || "";
+  if (document.getElementById("imgProfilGuru")) document.getElementById("imgProfilGuru").src = img;
+  if (document.getElementById("resit-avatar")) document.getElementById("resit-avatar").src = img;
+}
+
+function toggleEditProfil(on){
+  var view = document.getElementById("profilViewMode");
+  var edit = document.getElementById("profilEditMode");
+  if (!view || !edit) return;
+  view.style.display = on ? "none" : "block";
+  edit.style.display = on ? "block" : "none";
+}
+
+function simpanProfilGuruPro(){
+  var nama = (document.getElementById("guruNamaManual")?.value || "").trim();
+  var status = (document.getElementById("guruStatusManual")?.value || "").trim();
+  if (!nama) return alert("Nama penuh tidak boleh kosong.");
+
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function(p){
+      // upload photo if selected
+      var f = document.getElementById("guruPhotoFile")?.files?.[0];
+      if (f){
+        readFileAsBase64(f).then(function(b64){
+          google.script.run
+            .withSuccessHandler(function(pp){
+              showLoading(false);
+              updateProfileUI(pp,true);
+              toggleEditProfil(false);
+              alert("Profil & gambar disimpan.");
+            })
+            .withFailureHandler(function(err){
+              showLoading(false);
+              alert(err.message || err);
+            })
+            .uploadMyProfilePhoto(b64, f.type, f.name);
+        });
+      } else {
+        showLoading(false);
+        updateProfileUI(p,true);
+        toggleEditProfil(false);
+        alert("Profil disimpan.");
+      }
+    })
+    .withFailureHandler(function(err){
+      showLoading(false);
+      alert(err.message || err);
+    })
+    .updateProfileFields({name:nama, status:status});
+}
+
+function padamGambarProfil(){
+  if (!confirm("Buang gambar profil (override) ?")) return;
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function(p){
+      showLoading(false);
+      updateProfileUI(p,true);
+    })
+    .withFailureHandler(function(err){
+      showLoading(false);
+      alert(err.message || err);
+    })
+    .removeMyProfilePhoto();
+}
+
+function readFileAsBase64(file){
+  return new Promise(function(resolve,reject){
+    var reader = new FileReader();
+    reader.onload = function(){
+      var res = String(reader.result || "");
+      var idx = res.indexOf("base64,");
+      if (idx>=0) resolve(res.slice(idx+7));
+      else reject("Gagal baca base64");
+    };
+    reader.onerror = function(){ reject("Gagal baca fail"); };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Override helper payload: guna profil login
+function getGuruPayload_(){
+  var nama = (document.getElementById("guruNamaView")?.innerText || "").trim();
+  var email = (document.getElementById("guruEmailView")?.innerText || "").trim();
+  var status = (document.getElementById("guruStatusView")?.innerText || "").trim();
+  return { guruNama: nama, guruEmail: email, guruStatus: status };
+}
+
+</script>
+
+<script>
+/**
+ * Fix: Arkib PDF link boleh jadi rosak bila ada whitespace / encoding dalam href.
+ * Script ini akan auto-trim & normalize semua link Drive/Docs yang dirender dalam UI.
+ */
+(function () {
+  function sanitizeUrl(u){
+    return (u == null ? "" : String(u)).trim();
+  }
+
+  function fixLinks(root){
+    root = root || document;
+    const links = root.querySelectorAll('a[href*="drive.google.com"], a[href*="docs.google.com"]');
+    links.forEach(a => {
+      try{
+        // a.href adalah resolved URL; guna itu untuk buang whitespace/encoding
+        const resolved = sanitizeUrl(a.href);
+        if (resolved) a.href = resolved;
+        a.setAttribute("rel", "noopener noreferrer");
+        // Force open in new tab (jika belum)
+        if (!a.getAttribute("target")) a.setAttribute("target","_blank");
+      }catch(e){}
+    });
+  }
+
+  // Initial fix
+  document.addEventListener("DOMContentLoaded", () => fixLinks(document));
+
+  // Observe changes (arkib/table sering re-render)
+  const obs = new MutationObserver(muts => {
+    for (const m of muts){
+      if (m.addedNodes && m.addedNodes.length){
+        m.addedNodes.forEach(n=>{
+          if (n && n.querySelectorAll) fixLinks(n);
+        });
+      }
+    }
+  });
+  obs.observe(document.documentElement, { childList:true, subtree:true });
+})();
+</script>
+
+
+<script>
+/* ========= GOOGLE AUTH (GIS) - PRO LAYER (MINIMAL ADD-ON) ========= */
+/* Isi Client ID yang sama seperti Code.gs */
+window.GOOGLE_CLIENT_ID_OAUTH = window.GOOGLE_CLIENT_ID_OAUTH || ""; // set in config section
+
+function initGoogleAuthPro(){
+  try{
+    google.accounts.id.initialize({
+      client_id: window.window.GOOGLE_CLIENT_ID_OAUTH,
+      callback: onGoogleCredentialPro,
+      auto_select: false,
+      cancel_on_tap_outside: true
+    });
+    var btnDiv = document.getElementById("gSignInBtn");
+    if (btnDiv){
+      btnDiv.innerHTML = "";
+      google.accounts.id.renderButton(btnDiv, { theme: "outline", size: "large" });
+    }
+  }catch(e){ console.log(e); }
+}
+
+function onGoogleCredentialPro(resp){
+  var idToken = resp && resp.credential;
+  if (!idToken) return alert("Login gagal: token kosong.");
+  if (!google.script || !google.script.run) return alert("google.script.run tidak tersedia (pastikan ini HTML Service Apps Script).");
+  google.script.run
+    .withSuccessHandler(function(p){
+      updateProfileUIPro(p);
+      alert("Login berjaya.");
+    })
+    .withFailureHandler(function(err){
+      alert((err && err.message) ? err.message : err);
+    })
+    .saveProfileFromIdToken(idToken);
+}
+
+function loadProfilePro(){
+  if (!google.script || !google.script.run) return;
+  google.script.run
+    .withSuccessHandler(function(p){ updateProfileUIPro(p); })
+    .withFailureHandler(function(err){ updateProfileUIPro(null); console.log(err); })
+    .getMyProfileUI();
+}
+
+function logoutGuru(){
+  google.script.run
+    .withSuccessHandler(function(){
+      try{ google.accounts.id.disableAutoSelect(); }catch(e){}
+      updateProfileUIPro(null);
+      alert("Logout sistem selesai.");
+    })
+    .withFailureHandler(function(err){
+      alert((err && err.message) ? err.message : err);
+    })
+    .clearMyProfile();
+}
+
+function updateProfileUIPro(p){
+  var status = document.getElementById("authStatus");
+  var line = document.getElementById("authUserLine");
+  var btnLogout = document.getElementById("btnLogout");
+  var view = document.getElementById("profilViewMode");
+  var edit = document.getElementById("profilEditMode");
+  var need = document.getElementById("profilNeedLogin");
+  var img = document.getElementById("imgProfilGuru");
+
+  if (!p || !p.email){
+    if (status){ status.className="badge bg-danger"; status.innerText="LOGOUT"; }
+    if (line) line.innerHTML = "Tiada sesi login aktif.";
+    if (btnLogout) btnLogout.style.display="none";
+    if (view) view.style.display="none";
+    if (edit) edit.style.display="none";
+    if (need) need.style.display="block";
+    if (img) img.src="";
+    return;
+  }
+
+  if (status){ status.className="badge bg-success"; status.innerText="LOGGED IN"; }
+  if (line) line.innerHTML = "Log masuk sebagai: <b>" + p.email + "</b>";
+  if (btnLogout) btnLogout.style.display="inline-block";
+  if (need) need.style.display="none";
+  if (view) view.style.display="block";
+  if (edit) edit.style.display="none";
+
+  document.getElementById("guruNamaView").innerText = p.name || "-";
+  document.getElementById("guruEmailView").innerText = p.email || "-";
+  document.getElementById("guruStatusView").innerText = p.status || "Aktif";
+  document.getElementById("guruNamaManualPro").value = p.name || "";
+  document.getElementById("guruEmailManualPro").value = p.email || "";
+  document.getElementById("guruStatusManualPro").value = p.status || "Aktif";
+  if (img) img.src = p.photoUrl || p.pictureUrl || "";
+}
+
+function toggleEditProfil(on){
+  var view = document.getElementById("profilViewMode");
+  var edit = document.getElementById("profilEditMode");
+  if (!view || !edit) return;
+  view.style.display = on ? "none" : "block";
+  edit.style.display = on ? "block" : "none";
+}
+
+function simpanProfilGuruPro(){
+  var nama = (document.getElementById("guruNamaManualPro").value || "").trim();
+  var status = (document.getElementById("guruStatusManualPro").value || "Aktif").trim();
+  if (!nama) return alert("Nama penuh tidak boleh kosong.");
+
+  google.script.run
+    .withSuccessHandler(function(p){
+      // upload photo override if selected
+      var f = document.getElementById("guruPhotoFilePro")?.files?.[0];
+      if (!f){ updateProfileUIPro(p); toggleEditProfil(false); return alert("Profil disimpan."); }
+      var reader = new FileReader();
+      reader.onload = function(){
+        var res = String(reader.result || "");
+        var idx = res.indexOf("base64,");
+        var b64 = idx>=0 ? res.slice(idx+7) : "";
+        google.script.run
+          .withSuccessHandler(function(pp){ updateProfileUIPro(pp); toggleEditProfil(false); alert("Profil & gambar disimpan."); })
+          .withFailureHandler(function(err){ alert((err && err.message) ? err.message : err); })
+          .uploadMyProfilePhoto(b64, f.type, f.name);
+      };
+      reader.readAsDataURL(f);
+    })
+    .withFailureHandler(function(err){
+      alert((err && err.message) ? err.message : err);
+    })
+    .updateProfileFields({name:nama, status:status});
+}
+
+function padamGambarProfil(){
+  if (!confirm("Buang gambar profil override?")) return;
+  google.script.run
+    .withSuccessHandler(function(p){ updateProfileUIPro(p); })
+    .withFailureHandler(function(err){ alert((err && err.message) ? err.message : err); })
+    .removeMyProfilePhoto();
+}
+
+// Override payload guru: jika login ada, guna itu; kalau tidak, fallback kepada fungsi sedia ada (jika ada)
+function getGuruPayload_(){
+  var email = (document.getElementById("guruEmailView")?.innerText || "").trim();
+  var nama = (document.getElementById("guruNamaView")?.innerText || "").trim();
+  var status = (document.getElementById("guruStatusView")?.innerText || "").trim();
+  if (email) return { guruNama: nama || email, guruEmail: email, guruStatus: status || "Aktif" };
+  // fallback: cuba baca input manual sedia ada (jika anda ada di UI asal)
+  var nm = (document.getElementById("guruNamaManual")?.value || "").trim();
+  var em = (document.getElementById("guruEmailManual")?.value || "").trim();
+  return { guruNama: nm || em || "TANPA_NAMA", guruEmail: em || "TANPA_EMAIL", guruStatus: "Aktif" };
+}
+
+// Hook startup tanpa ganggu onload asal: guna DOMContentLoaded
+document.addEventListener("DOMContentLoaded", function(){
+  initGoogleAuthPro();
+  loadProfilePro();
+});
+</script>
+
+</body>
+</html>
